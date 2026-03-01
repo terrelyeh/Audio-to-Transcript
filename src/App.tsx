@@ -1,8 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { Upload, FileAudio, Loader2, CheckCircle2, AlertCircle, FileText, Sparkles, Copy, Check, Download, Edit3, Users, Eye, Plus, Search, Clock, Wand2, Cloud, Info, X, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const DEFAULT_PROMPTS = [
   { id: '1', name: '預設：重點與待辦事項', prompt: '條列式列出核心重點，並標示待辦事項 (Action Items)。' },
@@ -207,50 +204,44 @@ export default function App() {
       });
 
       // Transcribe
-      const transcribeResponse = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: file.type || 'audio/mp3',
-              },
-            },
-            {
-              text: `請將這段音檔進行逐字稿轉錄（Transcription）。
-要求：
-1. 盡可能準確地記錄下所有的對話內容。
-2. 務必標註說話者（如 Speaker A, Speaker B）。
-3. 務必在每段對話開頭加上時間戳記，格式為 [MM:SS]（例如 [00:12]）。
-4. 不要做任何摘要或修改。
-${glossaryTerms.length > 0 ? `5. 請注意以下專有名詞，轉錄時請優先使用：${glossaryTerms.join(', ')}` : ''}`,
-            },
-          ],
-        },
+      const transcribeRes = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'transcribe',
+          payload: {
+            base64Data,
+            mimeType: file.type || 'audio/mp3',
+            glossaryText: glossaryTerms.length > 0 ? glossaryTerms.join(', ') : ''
+          }
+        })
       });
-
-      const rawTranscript = transcribeResponse.text || '';
+      
+      if (!transcribeRes.ok) throw new Error('轉錄失敗，請稍後再試。');
+      const transcribeData = await transcribeRes.json();
+      const rawTranscript = transcribeData.text || '';
+      
       setTranscript(rawTranscript);
       setActiveTab('raw'); // Switch to raw so they can read it while cleaning
 
       // Clean up
       setAudioStatus('cleaning');
-      const cleanResponse = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: `以下是一段語音轉錄的逐字稿。請幫我進行「清稿」（Cleanup）。
-要求：
-1. 去除冗言贅字（如：嗯、啊、那個、就是說等）。
-2. 修正語法錯誤，使句子通順。
-3. 根據語意進行適當的分段與標點符號修正。
-4. 務必保留原本的「時間戳記」與「說話者標示」。
-5. 保持原本的語意和對話結構，不要過度摘要。
-
-逐字稿內容：
-${rawTranscript}`,
+      const cleanRes = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'clean',
+          payload: {
+            transcript: rawTranscript,
+            glossaryText: glossaryTerms.length > 0 ? glossaryTerms.join(', ') : ''
+          }
+        })
       });
 
-      const cleaned = cleanResponse.text || '';
+      if (!cleanRes.ok) throw new Error('清稿失敗，請稍後再試。');
+      const cleanData = await cleanRes.json();
+      const cleaned = cleanData.text || '';
+      
       setCleanedText(cleaned);
       setAudioStatus('success');
       setActiveTab('cleaned'); // Switch to cleaned when done
@@ -272,17 +263,25 @@ ${rawTranscript}`,
     setIsEditing(false);
 
     try {
-      const summaryResponse = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `以下是一段經過清稿的會議記錄/訪談逐字稿。請根據以下要求進行內容產出。
-要求格式與風格：
-${customPrompt}
-
-逐字稿內容：
-${textToSummarize}`,
+      const summaryRes = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'summarize',
+          payload: {
+            cleanedText: textToSummarize,
+            customPrompt
+          }
+        })
       });
 
-      setSummaryText(summaryResponse.text || '');
+      if (!summaryRes.ok) {
+        const errorData = await summaryRes.json();
+        throw new Error(errorData.error || '產生內容時發生錯誤');
+      }
+      
+      const summaryData = await summaryRes.json();
+      setSummaryText(summaryData.text || '');
       setSummaryStatus('success');
     } catch (error: any) {
       console.error(error);
