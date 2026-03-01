@@ -1,0 +1,5 @@
+{
+  "name": "AI 語音轉錄與清稿工具",
+  "description": "上傳音檔，自動進行兩階段處理：先精準轉錄逐字稿，再進行專業清稿，去除冗言贅字並修正語句。",
+  "requestFramePermissions": []
+}
