@@ -360,8 +360,8 @@ export default function App() {
 2. 修正語法錯誤，使句子通順。
 3. 保持原本的語意和說話者的風格。
 4. 重新排版，加上適當的標點符號和分段。
-5. 保留原本的時間標記 (Timestamps)。
-6. **保留原始逐字稿中的說話者標示（如：[說話者A]），勿删除或合並。**${cleanGlossaryPrompt}
+5. 保留原本的時間標記 (Timestamps)，格式必須維持 [MM:SS] 或 [HH:MM:SS]，不可更動格式。
+6. **保留原始逐字稿中的說話者標示（如：「主持人：...」、「王小明：...」），勿刪除或合併。**${cleanGlossaryPrompt}
 
 原始逐字稿：
 ${rawTranscript}`,
