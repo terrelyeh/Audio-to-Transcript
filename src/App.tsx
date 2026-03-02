@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileAudio, Loader2, CheckCircle2, AlertCircle, FileText, Sparkles, Copy, Check, Download, Edit3, Users, Eye, Plus, Search, Clock, Wand2, Cloud, Info, X, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
+import { GoogleGenAI } from '@google/genai';
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const DEFAULT_PROMPTS = [
   { id: '1', name: '預設：重點與待辦事項', prompt: '條列式列出核心重點，並標示待辦事項 (Action Items)。' },
@@ -204,43 +207,53 @@ export default function App() {
       });
 
       // Transcribe
-      const transcribeRes = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'transcribe',
-          payload: {
-            base64Data,
-            mimeType: file.type || 'audio/mp3',
-            glossaryText: glossaryTerms.length > 0 ? glossaryTerms.join(', ') : ''
-          }
-        })
+      const glossaryPrompt = glossaryTerms.length > 0 ? `\n4. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
+      const transcribeRes = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: file.type || 'audio/mp3',
+              },
+            },
+            {
+              text: `請將這段語音轉錄為繁體中文逐字稿。
+要求：
+1. 盡可能保留所有細節，包含語氣詞。
+2. 加上時間標記 (Timestamps)，格式為 [MM:SS] 或 [HH:MM:SS]，每隔一段對話或段落標記一次。
+3. 根據語意適當分段。${glossaryPrompt}
+`,
+            },
+          ],
+        },
       });
       
-      if (!transcribeRes.ok) throw new Error('轉錄失敗，請稍後再試。');
-      const transcribeData = await transcribeRes.json();
-      const rawTranscript = transcribeData.text || '';
+      const rawTranscript = transcribeRes.text || '';
       
       setTranscript(rawTranscript);
       setActiveTab('raw'); // Switch to raw so they can read it while cleaning
 
       // Clean up
       setAudioStatus('cleaning');
-      const cleanRes = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'clean',
-          payload: {
-            transcript: rawTranscript,
-            glossaryText: glossaryTerms.length > 0 ? glossaryTerms.join(', ') : ''
-          }
-        })
+      const cleanGlossaryPrompt = glossaryTerms.length > 0 ? `\n6. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
+      const cleanRes = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: `以下是一段語音轉錄的逐字稿。請幫我進行「清稿」（Cleanup）。
+要求：
+1. 去除冗言贅字（如：嗯、啊、那個、就是說等）。
+2. 修正語法錯誤，使句子通順。
+3. 保持原本的語意和說話者的風格。
+4. 重新排版，加上適當的標點符號和分段。
+5. 保留原本的時間標記 (Timestamps)。${cleanGlossaryPrompt}
+
+原始逐字稿：
+${rawTranscript}
+`,
       });
 
-      if (!cleanRes.ok) throw new Error('清稿失敗，請稍後再試。');
-      const cleanData = await cleanRes.json();
-      const cleaned = cleanData.text || '';
+      const cleaned = cleanRes.text || '';
       
       setCleanedText(cleaned);
       setAudioStatus('success');
@@ -263,25 +276,18 @@ export default function App() {
     setIsEditing(false);
 
     try {
-      const summaryRes = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'summarize',
-          payload: {
-            cleanedText: textToSummarize,
-            customPrompt
-          }
-        })
+      const summaryRes = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `以下是一段經過清稿的會議記錄/訪談逐字稿。請根據以下要求進行內容產出。
+要求格式與風格：
+${customPrompt}
+
+清稿內容：
+${textToSummarize}
+`,
       });
 
-      if (!summaryRes.ok) {
-        const errorData = await summaryRes.json();
-        throw new Error(errorData.error || '產生內容時發生錯誤');
-      }
-      
-      const summaryData = await summaryRes.json();
-      setSummaryText(summaryData.text || '');
+      setSummaryText(summaryRes.text || '');
       setSummaryStatus('success');
     } catch (error: any) {
       console.error(error);
