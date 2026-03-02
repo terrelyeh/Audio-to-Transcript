@@ -65,6 +65,7 @@ const generateSRT = (text: string): string => {
 };
 
 const classifyError = (message: string): string => {
+  if (!message) return '發生未知錯誤，請重試。';
   if (message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota')) {
     return 'AI 伺服器請求量超過配額限制。請稍等 1~2 分鐘後點擊「重試」即可，不需要重新上傳音檔。';
   }
@@ -77,7 +78,7 @@ const classifyError = (message: string): string => {
   if (message.includes('File processing failed') || message.includes('FAILED')) {
     return '伺服器無法處理此音檔，請確認檔案未損壞，或嘗試其他格式。';
   }
-  return message || '發生未知錯誤，請重試。';
+  return message;
 };
 
 export default function App() {
@@ -329,11 +330,11 @@ export default function App() {
       setActiveTab('raw');
       let rawTranscript = '';
       const transcribeStream = await ai.models.generateContentStream({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash-preview-04-17',
         contents: {
           parts: [
             { fileData: { fileUri: uploadedFile.uri, mimeType: uploadedFile.mimeType || file.type || 'audio/mp3' } },
-            { text: `請將這段語音轉錄為繁體中文逸字稿。要求：
+            { text: `請將這段語音轉錄為繁體中文逐字稿。要求：
 1. 盡可能保留所有細節，包含語氣詞。
 2. 加上時間標記 (Timestamps)，格式為 [MM:SS] 或 [HH:MM:SS]，每隔一段對話或段落標記一次。
 3. 根據語意適當分段。${glossaryPrompt}` },
@@ -352,15 +353,15 @@ export default function App() {
       setActiveTab('cleaned');
       let cleaned = '';
       const cleanStream = await ai.models.generateContentStream({
-        model: 'gemini-2.0-flash',
-        contents: `以下是一段語音轉錄的逸字稿。請幫我進行「清稿」（Cleanup）。要求：
+        model: 'gemini-2.5-flash-preview-04-17',
+        contents: `以下是一段語音轉錄的逐字稿。請幫我進行「清稿」（Cleanup）。要求：
 1. 去除冗言赅字（如：嗯、啊、那個、就是說等）。
 2. 修正語法錯誤，使句子通順。
 3. 保持原本的語意和說話者的風格。
 4. 重新排版，加上適當的標點符號和分段。
 5. 保留原本的時間標記 (Timestamps)。${cleanGlossaryPrompt}
 
-原始逸字稿：
+原始逐字稿：
 ${rawTranscript}`,
       });
       for await (const chunk of cleanStream) {
@@ -375,8 +376,9 @@ ${rawTranscript}`,
     } catch (error: any) {
       clearInterval(progressInterval!);
       setAudioProgress(0);
-      console.error(error);
-      setErrorMessage(classifyError(error.message));
+      console.error('processAudio error:', error);
+      const msg = error?.message || error?.toString() || '發生未知錯誤，請重試。';
+      setErrorMessage(classifyError(msg));
       setAudioStatus('error');
     }
   };
@@ -393,8 +395,8 @@ ${rawTranscript}`,
     try {
       let summaryContent = '';
       const summaryStream = await ai.models.generateContentStream({
-        model: 'gemini-2.0-flash',
-        contents: `以下是一段經過清稿的會議記錄/訪談逸字稿。請根據以下要求進行內容產出。
+        model: 'gemini-2.5-flash-preview-04-17',
+        contents: `以下是一段經過清稿的會議記錄/訪談逐字稿。請根據以下要求進行內容產出。
 要求格式與風格：
 ${customPrompt}
 
@@ -408,8 +410,9 @@ ${textToSummarize}
       }
       setSummaryStatus('success');
     } catch (error: any) {
-      console.error(error);
-      setErrorMessage(classifyError(error.message));
+      console.error('generateSummary error:', error);
+      const msg = error?.message || error?.toString() || '發生未知錯誤，請重試。';
+      setErrorMessage(classifyError(msg));
       setSummaryStatus('error');
     }
   };
@@ -438,7 +441,7 @@ ${textToSummarize}
     let mimeType = 'text/plain';
     if (format === 'srt') {
       content = generateSRT(activeTab === 'raw' ? transcript : cleanedText);
-      if (!content) { alert('找不到時間標記，無法產生 SRT 字幕檔。請確認逸字稿中含有 [MM:SS] 格式的時間標記。'); return; }
+      if (!content) { alert('找不到時間標記，無法產生 SRT 字幕檔。請確認逐字稿中含有 [MM:SS] 格式的時間標記。'); return; }
       mimeType = 'text/srt';
     } else {
       content = getCurrentText();
@@ -965,10 +968,10 @@ ${textToSummarize}
               {/* Tabs */}
               <div className="flex border-b border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 shrink-0">
                 <button onClick={() => setActiveTab('raw')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'raw' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
-                  <FileText className="w-4 h-4" /> 原始逸字稿
+                  <FileText className="w-4 h-4" /> 原始逐字稿
                 </button>
                 <button onClick={() => setActiveTab('cleaned')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'cleaned' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
-                  <Sparkles className="w-4 h-4" /> 清稿逸字稿
+                  <Sparkles className="w-4 h-4" /> 清稿逐字稿
                 </button>
                 <button onClick={() => setActiveTab('summary')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'summary' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
                   <Wand2 className="w-4 h-4" /> AI 整理內容
