@@ -330,7 +330,7 @@ export default function App() {
       setActiveTab('raw');
       let rawTranscript = '';
       const transcribeStream = await ai.models.generateContentStream({
-        model: 'gemini-2.5-flash-preview-04-17',
+        model: 'gemini-1.5-flash',
         contents: {
           parts: [
             { fileData: { fileUri: uploadedFile.uri, mimeType: uploadedFile.mimeType || file.type || 'audio/mp3' } },
@@ -353,7 +353,7 @@ export default function App() {
       setActiveTab('cleaned');
       let cleaned = '';
       const cleanStream = await ai.models.generateContentStream({
-        model: 'gemini-2.5-flash-preview-04-17',
+        model: 'gemini-1.5-flash',
         contents: `以下是一段語音轉錄的逐字稿。請幫我進行「清稿」（Cleanup）。要求：
 1. 去除冗言赅字（如：嗯、啊、那個、就是說等）。
 2. 修正語法錯誤，使句子通順。
@@ -395,7 +395,7 @@ ${rawTranscript}`,
     try {
       let summaryContent = '';
       const summaryStream = await ai.models.generateContentStream({
-        model: 'gemini-2.5-flash-preview-04-17',
+        model: 'gemini-1.5-flash',
         contents: `以下是一段經過清稿的會議記錄/訪談逐字稿。請根據以下要求進行內容產出。
 要求格式與風格：
 ${customPrompt}
