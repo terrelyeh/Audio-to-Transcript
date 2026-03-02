@@ -278,7 +278,7 @@ export default function App() {
       startProgress(70, 95, 10000); // Simulate cleaning up to 95%
       const cleanGlossaryPrompt = glossaryTerms.length > 0 ? `\n6. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
       const cleanRes = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: `以下是一段語音轉錄的逐字稿。請幫我進行「清稿」（Cleanup）。
 要求：
 1. 去除冗言贅字（如：嗯、啊、那個、就是說等）。
