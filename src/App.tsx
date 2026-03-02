@@ -477,9 +477,24 @@ ${textToSummarize}
   const seekAudio = (timeStr: string) => {
     const seconds = timeStrToSeconds(timeStr);
     setLastClickedTimestamp(seconds);
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = Math.max(0, seconds + timeOffset);
-    audioRef.current.play().catch(e => console.log("Audio play prevented:", e));
+    const audio = audioRef.current;
+    if (!audio) {
+      alert('請先上傳音檔，才能點擊時間標記播放。');
+      return;
+    }
+    const targetTime = Math.max(0, seconds + timeOffset);
+    const doSeek = () => {
+      audio.currentTime = targetTime;
+      audio.play().catch(e => {
+        console.log("Audio play prevented:", e);
+        setErrorMessage('播放失敗：瀏覽器阻擋了自動播放，請先手動點擊播放器播放一次。');
+      });
+    };
+    if (audio.readyState >= 1) {
+      doSeek();
+    } else {
+      audio.addEventListener('loadedmetadata', doSeek, { once: true });
+    }
   };
 
   const handleAutoCalibrate = () => {
