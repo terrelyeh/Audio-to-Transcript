@@ -882,8 +882,8 @@ ${textToSummarize}
           </div>
 
           {/* Right Column */}
-          <div className="lg:col-span-8 lg:sticky lg:top-8 lg:max-h-[calc(130vh-4rem)] flex flex-col">
-            <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 flex-1 flex flex-col overflow-hidden">
+          <div className="lg:col-span-8 lg:sticky lg:top-8 lg:h-[calc(100vh-6rem)] flex flex-col">
+            <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 flex-1 flex flex-col min-h-0">
               
               {/* Audio Player */}
               {audioUrl && (
@@ -996,7 +996,7 @@ ${textToSummarize}
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 relative bg-white dark:bg-stone-900 flex flex-col overflow-hidden">
+              <div className="flex-1 relative bg-white dark:bg-stone-900 flex flex-col min-h-0">
                 {audioStatus === 'idle' && summaryStatus === 'idle' && !transcript && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center">
                     <FileText className="w-16 h-16 mb-4 opacity-20" />
