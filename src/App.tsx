@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileAudio, Loader2, CheckCircle2, AlertCircle, FileText, Sparkles, Copy, Check, Download, Edit3, Users, Eye, Plus, Search, Clock, Wand2, Cloud, Info, X, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
+import { Upload, FileAudio, Loader2, CheckCircle2, AlertCircle, FileText, Sparkles, Copy, Check, Download, Edit3, Users, Eye, Plus, Search, Clock, Wand2, Cloud, Info, X, ChevronDown, ChevronRight, BookOpen, Moon, Sun, SlidersHorizontal, Crosshair, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -11,11 +11,86 @@ const DEFAULT_PROMPTS = [
   { id: '4', name: '客戶痛點分析', prompt: '請只列出客戶提到的痛點、抱怨與需求。' }
 ];
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE = 65 * 1024 * 1024; // 65MB
+
+const loadPrompts = () => {
+  try {
+    const saved = localStorage.getItem('ai_transcriber_prompts');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_PROMPTS;
+};
+
+const formatDuration = (seconds: number): string => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+const timeStrToSeconds = (timeStr: string): number => {
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return 0;
+};
+
+const secondsToSRTTime = (s: number): string => {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')},000`;
+};
+
+const generateSRT = (text: string): string => {
+  const timestampRegex = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
+  const matches = [...text.matchAll(timestampRegex)];
+  if (matches.length === 0) return '';
+  let srt = '';
+  for (let i = 0; i < matches.length; i++) {
+    const startTs = timeStrToSeconds(matches[i][1]);
+    const endTs = matches[i + 1] ? timeStrToSeconds(matches[i + 1][1]) : startTs + 5;
+    const startIdx = (matches[i].index ?? 0) + matches[i][0].length;
+    const endIdx = matches[i + 1]?.index ?? text.length;
+    const content = text.substring(startIdx, endIdx).replace(/\[.*?\]/g, '').trim().replace(/\n+/g, ' ');
+    if (content) {
+      srt += `${i + 1}\n${secondsToSRTTime(startTs)} --> ${secondsToSRTTime(endTs)}\n${content}\n\n`;
+    }
+  }
+  return srt;
+};
+
+const classifyError = (message: string): string => {
+  if (message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota')) {
+    return 'AI 伺服器請求量超過配額限制。請稍等 1~2 分鐘後點擊「重試」即可，不需要重新上傳音檔。';
+  }
+  if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('ERR_NETWORK')) {
+    return '網路連線失敗，請確認您的網路狀態後重試。';
+  }
+  if (message.includes('INVALID_ARGUMENT') || message.includes('mimeType') || message.includes('unsupported')) {
+    return '音檔格式不支援，請嘗試轉換為 MP3 或 WAV 格式再上傳。';
+  }
+  if (message.includes('File processing failed') || message.includes('FAILED')) {
+    return '伺服器無法處理此音檔，請確認檔案未損壞，或嘗試其他格式。';
+  }
+  return message || '發生未知錯誤，請重試。';
+};
 
 export default function App() {
+  // Dark mode
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('ai_transcriber_dark') === 'true');
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('ai_transcriber_dark', String(isDark));
+  }, [isDark]);
+
   // Core State
   const [file, setFile] = useState<File | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
   
   // Upload State
   const [uploadMode, setUploadMode] = useState<'local' | 'drive'>('local');
@@ -34,19 +109,28 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'summary' | 'cleaned' | 'raw'>('summary');
   const [copied, setCopied] = useState(false);
 
+  // UI State
+  const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+
   // Advanced Features State
   const [glossaryTerms, setGlossaryTerms] = useState<string[]>(() => {
     const saved = localStorage.getItem('ai_transcriber_glossary') || '';
     return saved.split(/[,，\n]+/).map(t => t.trim()).filter(Boolean);
   });
   const [termInput, setTermInput] = useState('');
-  const [prompts, setPrompts] = useState(DEFAULT_PROMPTS);
+  const [prompts, setPrompts] = useState(loadPrompts);
   const [selectedPromptId, setSelectedPromptId] = useState('1');
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPTS[0].prompt);
 
   useEffect(() => {
     localStorage.setItem('ai_transcriber_glossary', glossaryTerms.join(', '));
   }, [glossaryTerms]);
+
+  useEffect(() => {
+    localStorage.setItem('ai_transcriber_prompts', JSON.stringify(prompts));
+  }, [prompts]);
 
   const handleAddTerms = () => {
     if (!termInput.trim()) return;
@@ -68,6 +152,7 @@ export default function App() {
   const [isGlossaryModalOpen, setIsGlossaryModalOpen] = useState(false);
   const [audioUrl, setAudioUrl] = useState('');
   const [timeOffset, setTimeOffset] = useState(-9);
+  const [lastClickedTimestamp, setLastClickedTimestamp] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -80,12 +165,13 @@ export default function App() {
       return () => URL.revokeObjectURL(url);
     } else {
       setAudioUrl('');
+      setAudioDuration(null);
     }
   }, [file]);
 
   const validateAndSetFile = (selectedFile: File) => {
     if (selectedFile.size > MAX_FILE_SIZE) {
-      const msg = `檔案大小超過限制！目前最大支援 100MB（您上傳的檔案為 ${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB）。`;
+      const msg = `檔案大小超過限制！目前最大支援 65MB（您上傳的檔案為 ${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB）。`;
       alert(msg);
       setErrorMessage(msg);
       setAudioStatus('error');
@@ -147,7 +233,10 @@ export default function App() {
         setAudioStatus('idle');
       }
     } catch (e: any) {
-      setErrorMessage(e.message);
+      const errMsg = e.message?.includes('timeout') || e.message?.includes('504')
+        ? 'Google Drive 下載逾時，請確認檔案小於 65MB 且連結權限正確。'
+        : classifyError(e.message);
+      setErrorMessage(errMsg);
       setAudioStatus('error');
     } finally {
       setIsFetchingDrive(false);
@@ -163,6 +252,7 @@ export default function App() {
     setErrorMessage('');
     setIsEditing(false);
     setSearchQuery('');
+    setLastClickedTimestamp(null);
   };
 
   const handlePromptSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -198,113 +288,95 @@ export default function App() {
     setSummaryText('');
     setIsEditing(false);
 
-    // Progress simulation intervals
-    let progressInterval: NodeJS.Timeout;
+    let progressInterval: ReturnType<typeof setInterval>;
     const startProgress = (start: number, end: number, duration: number) => {
       clearInterval(progressInterval);
       let current = start;
       const step = (end - start) / (duration / 100);
       progressInterval = setInterval(() => {
         current += step;
-        if (current >= end) {
-          current = end;
-          clearInterval(progressInterval);
-        }
+        if (current >= end) { current = end; clearInterval(progressInterval); }
         setAudioProgress(Math.floor(current));
       }, 100);
     };
 
     try {
-      // Upload the file first
-      startProgress(0, 20, 3000); // Simulate upload up to 20%
+      startProgress(0, 20, 3000);
       let uploadedFile = await ai.files.upload({
         file: file,
-        config: {
-          mimeType: file.type || 'audio/mp3',
-        }
+        config: { mimeType: file.type || 'audio/mp3' }
       });
 
-      // Poll until the file is ACTIVE
       if (uploadedFile.state === 'PROCESSING') {
         setAudioStatus('processing');
-        startProgress(20, 40, 5000); // Simulate processing up to 40%
+        startProgress(20, 40, 5000);
       } else {
         setAudioProgress(40);
       }
-      
       while (uploadedFile.state === 'PROCESSING') {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         uploadedFile = await ai.files.get({ name: uploadedFile.name! });
       }
-
       if (uploadedFile.state === 'FAILED') {
         clearInterval(progressInterval);
         throw new Error('File processing failed on the server.');
       }
 
-      // Transcribe
+      // Transcribe with streaming
       setAudioStatus('transcribing');
-      startProgress(40, 70, 15000); // Simulate transcribing up to 70%
+      startProgress(40, 70, 15000);
       const glossaryPrompt = glossaryTerms.length > 0 ? `\n4. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
-      const transcribeRes = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+      setActiveTab('raw');
+      let rawTranscript = '';
+      const transcribeStream = await ai.models.generateContentStream({
+        model: 'gemini-2.0-flash',
         contents: {
           parts: [
-            {
-              fileData: {
-                fileUri: uploadedFile.uri,
-                mimeType: uploadedFile.mimeType || file.type || 'audio/mp3',
-              },
-            },
-            {
-              text: `請將這段語音轉錄為繁體中文逐字稿。
-要求：
+            { fileData: { fileUri: uploadedFile.uri, mimeType: uploadedFile.mimeType || file.type || 'audio/mp3' } },
+            { text: `請將這段語音轉錄為繁體中文逸字稿。要求：
 1. 盡可能保留所有細節，包含語氣詞。
 2. 加上時間標記 (Timestamps)，格式為 [MM:SS] 或 [HH:MM:SS]，每隔一段對話或段落標記一次。
-3. 根據語意適當分段。${glossaryPrompt}
-`,
-            },
+3. 根據語意適當分段。${glossaryPrompt}` },
           ],
         },
       });
-      
-      const rawTranscript = transcribeRes.text || '';
-      
-      setTranscript(rawTranscript);
-      setActiveTab('raw'); // Switch to raw so they can read it while cleaning
+      for await (const chunk of transcribeStream) {
+        rawTranscript += chunk.text || '';
+        setTranscript(rawTranscript);
+      }
 
-      // Clean up
+      // Clean with streaming
       setAudioStatus('cleaning');
-      startProgress(70, 95, 10000); // Simulate cleaning up to 95%
+      startProgress(70, 95, 10000);
       const cleanGlossaryPrompt = glossaryTerms.length > 0 ? `\n6. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
-      const cleanRes = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `以下是一段語音轉錄的逐字稿。請幫我進行「清稿」（Cleanup）。
-要求：
-1. 去除冗言贅字（如：嗯、啊、那個、就是說等）。
+      setActiveTab('cleaned');
+      let cleaned = '';
+      const cleanStream = await ai.models.generateContentStream({
+        model: 'gemini-2.0-flash',
+        contents: `以下是一段語音轉錄的逸字稿。請幫我進行「清稿」（Cleanup）。要求：
+1. 去除冗言赅字（如：嗯、啊、那個、就是說等）。
 2. 修正語法錯誤，使句子通順。
 3. 保持原本的語意和說話者的風格。
 4. 重新排版，加上適當的標點符號和分段。
 5. 保留原本的時間標記 (Timestamps)。${cleanGlossaryPrompt}
 
-原始逐字稿：
-${rawTranscript}
-`,
+原始逸字稿：
+${rawTranscript}`,
       });
+      for await (const chunk of cleanStream) {
+        cleaned += chunk.text || '';
+        setCleanedText(cleaned);
+      }
 
-      const cleaned = cleanRes.text || '';
-      
-      setCleanedText(cleaned);
       clearInterval(progressInterval);
       setAudioProgress(100);
       setAudioStatus('success');
-      setActiveTab('cleaned'); // Switch to cleaned when done
 
     } catch (error: any) {
-      clearInterval(progressInterval);
+      clearInterval(progressInterval!);
       setAudioProgress(0);
       console.error(error);
-      setErrorMessage(error.message || '發生錯誤，請稍後再試。');
+      setErrorMessage(classifyError(error.message));
       setAudioStatus('error');
     }
   };
@@ -319,9 +391,10 @@ ${rawTranscript}
     setIsEditing(false);
 
     try {
-      const summaryRes = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `以下是一段經過清稿的會議記錄/訪談逐字稿。請根據以下要求進行內容產出。
+      let summaryContent = '';
+      const summaryStream = await ai.models.generateContentStream({
+        model: 'gemini-2.0-flash',
+        contents: `以下是一段經過清稿的會議記錄/訪談逸字稿。請根據以下要求進行內容產出。
 要求格式與風格：
 ${customPrompt}
 
@@ -329,16 +402,14 @@ ${customPrompt}
 ${textToSummarize}
 `,
       });
-
-      setSummaryText(summaryRes.text || '');
+      for await (const chunk of summaryStream) {
+        summaryContent += chunk.text || '';
+        setSummaryText(summaryContent);
+      }
       setSummaryStatus('success');
     } catch (error: any) {
       console.error(error);
-      let errorMsg = error.message || '產生內容時發生錯誤，請稍後再試。';
-      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota')) {
-        errorMsg = 'AI 伺服器目前請求量過大 (超過配額限制)。因為您的音檔較長，請稍等 1~2 分鐘後，直接點擊右下方的「產生 AI 內容」重試即可，不需要重新上傳音檔！';
-      }
-      setErrorMessage(errorMsg);
+      setErrorMessage(classifyError(error.message));
       setSummaryStatus('error');
     }
   };
@@ -361,17 +432,28 @@ ${textToSummarize}
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const downloadText = () => {
-    const text = getCurrentText();
-    const blob = new Blob([text], { type: 'text/markdown' });
+  const downloadFile = (format: 'md' | 'txt' | 'srt') => {
+    const baseName = file?.name.replace(/\.[^/.]+$/, "") || 'audio';
+    let content = '';
+    let mimeType = 'text/plain';
+    if (format === 'srt') {
+      content = generateSRT(activeTab === 'raw' ? transcript : cleanedText);
+      if (!content) { alert('找不到時間標記，無法產生 SRT 字幕檔。請確認逸字稿中含有 [MM:SS] 格式的時間標記。'); return; }
+      mimeType = 'text/srt';
+    } else {
+      content = getCurrentText();
+      mimeType = format === 'md' ? 'text/markdown' : 'text/plain';
+    }
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${file?.name.replace(/\.[^/.]+$/, "") || 'audio'}_${activeTab}.md`;
+    a.download = `${baseName}_${activeTab}.${format}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setIsExportMenuOpen(false);
   };
 
   const handleReplaceAll = () => {
@@ -388,14 +470,17 @@ ${textToSummarize}
   };
 
   const seekAudio = (timeStr: string) => {
+    const seconds = timeStrToSeconds(timeStr);
+    setLastClickedTimestamp(seconds);
     if (!audioRef.current) return;
-    const parts = timeStr.split(':').map(Number);
-    let seconds = 0;
-    if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
-    if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-    
     audioRef.current.currentTime = Math.max(0, seconds + timeOffset);
     audioRef.current.play().catch(e => console.log("Audio play prevented:", e));
+  };
+
+  const handleAutoCalibrate = () => {
+    if (lastClickedTimestamp === null || !audioRef.current) return;
+    const newOffset = Math.round(audioRef.current.currentTime - lastClickedTimestamp);
+    setTimeOffset(newOffset);
   };
 
   const highlightText = (text: string) => {
@@ -435,26 +520,46 @@ ${textToSummarize}
     });
   };
 
+  const isProcessing = ['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus);
+  const hasContent = !!(transcript || cleanedText || summaryText);
+  const wordCount = getCurrentText().replace(/\s+/g, '').length;
+
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <header className="mb-8 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-stone-900 mb-3 flex items-center justify-center gap-3">
+        <header className="mb-8 text-center relative">
+          <div className="absolute right-0 top-0 flex items-center gap-2">
+            <button
+              onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
+              className="lg:hidden p-2 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
+              title="切換操作面板"
+            >
+              {isLeftPanelOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setIsDark(!isDark)}
+              className="p-2 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
+              title="切換深色/淡色模式"
+            >
+              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+          </div>
+          <h1 className="text-4xl font-bold tracking-tight text-stone-900 dark:text-white mb-3 flex items-center justify-center gap-3">
             <Sparkles className="w-8 h-8 text-indigo-600" />
             AI 語音轉錄與清稿工具
           </h1>
-          <p className="text-lg text-stone-600 max-w-2xl mx-auto">
+          <p className="text-lg text-stone-600 dark:text-stone-400 max-w-2xl mx-auto">
             上傳您的 Podcast 訪談或會議記錄音檔。我們將為您自動進行精準轉錄與專業清稿，並可根據您的需求，無限次產出不同格式的內容。
           </p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* Left Column: Two-Step Workflow (Takes 4 columns) */}
-          <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto custom-scrollbar pb-4">
+          {/* Left Column */}
+          <div className={`lg:col-span-4 space-y-6 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto custom-scrollbar pb-4 ${!isLeftPanelOpen ? 'hidden lg:block' : ''}`}>
             
             {/* Step 1: Audio Processing */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-100">
+            <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-3 mb-5">
                 <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold">1</div>
                 <h3 className="text-lg font-bold text-stone-900">語音轉錄與清稿</h3>
@@ -756,148 +861,122 @@ ${textToSummarize}
             )}
           </div>
 
-          {/* Right Column: Results (Takes 8 columns, taller height) */}
+          {/* Right Column */}
           <div className="lg:col-span-8 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] flex flex-col">
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex-1 flex flex-col overflow-hidden">
+            <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 flex-1 flex flex-col overflow-hidden">
               
-              {/* Audio Player Header */}
+              {/* Audio Player */}
               {audioUrl && (
-                <div className="bg-stone-900 px-4 py-3 flex justify-center border-b border-stone-800">
-                  <audio ref={audioRef} src={audioUrl} controls className="w-full max-w-2xl h-10" />
+                <div className="bg-stone-900 dark:bg-stone-950 px-4 py-3 flex flex-col gap-2 border-b border-stone-800">
+                  <audio
+                    ref={audioRef}
+                    src={audioUrl}
+                    controls
+                    onLoadedMetadata={(e) => setAudioDuration((e.target as HTMLAudioElement).duration)}
+                    className="w-full h-10"
+                  />
+                  {lastClickedTimestamp !== null && (
+                    <button
+                      onClick={handleAutoCalibrate}
+                      className="self-end flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-full transition-colors"
+                      title="以目前播放位置自動計算 Offset"
+                    >
+                      <Crosshair className="w-3 h-3" /> 自動校準 Offset (offset: {timeOffset > 0 ? '+' : ''}{timeOffset}s)
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* Document Title */}
-              {file?.name && (transcript || cleanedText || summaryText) && (
-                <div className="bg-white px-5 py-4 border-b border-stone-100 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+              {file?.name && hasContent && (
+                <div className="bg-white dark:bg-stone-900 px-5 py-3 border-b border-stone-100 dark:border-stone-800 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 shrink-0">
                     <FileAudio className="w-4 h-4" />
                   </div>
-                  <h2 className="text-lg font-bold text-stone-800 truncate" title={file.name}>
-                    {file.name}
-                  </h2>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-stone-800 dark:text-white truncate" title={file.name}>{file.name}</h2>
+                    {audioDuration !== null && <p className="text-xs text-stone-400">{formatDuration(audioDuration)}</p>}
+                  </div>
                 </div>
               )}
 
-              {/* Toolbar: Search, Replace, Time Offset & Mode Toggle */}
-              {(transcript || cleanedText || summaryText) && (
-                <div className="bg-stone-50 border-b border-stone-200 p-3 flex flex-col gap-3">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    
-                    <div className="flex flex-wrap items-center gap-4 flex-1">
-                      {/* Search Bar */}
-                      <div className="relative w-full max-w-[200px]">
-                        <Search className="w-4 h-4 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          placeholder="搜尋文字..."
-                          value={searchQuery}
-                          onChange={e => setSearchQuery(e.target.value)}
-                          className="w-full text-sm border border-stone-200 rounded-md pl-8 pr-3 py-1.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-white"
-                        />
-                      </div>
-                      
-                      {/* Divider */}
-                      <div className="w-px h-5 bg-stone-300 hidden sm:block"></div>
-                      
-                      {/* Replace Bar */}
+              {/* Toolbar */}
+              {hasContent && (
+                <div className="bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Search */}
+                    <div className="relative flex-1 max-w-[220px]">
+                      <Search className="w-4 h-4 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="搜尋文字..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full text-sm border border-stone-200 dark:border-stone-600 rounded-md pl-8 pr-3 py-1.5 outline-none focus:border-indigo-500 bg-white dark:bg-stone-700 dark:text-white"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Expand toolbar */}
+                      <button
+                        onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
+                        className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
+                          isToolbarExpanded ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-stone-700 border-stone-200 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-50'
+                        }`}
+                        title="展開工具列"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">工具</span>
+                      </button>
+                      {/* Edit mode */}
+                      <button
+                        onClick={() => setIsEditing(!isEditing)}
+                        className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-colors font-medium ${
+                          isEditing ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-stone-700 border border-stone-200 dark:border-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-50 shadow-sm'
+                        }`}
+                      >
+                        {isEditing ? <Edit3 className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {isEditing ? '編輯模式' : '閱讀模式'}
+                      </button>
+                    </div>
+                  </div>
+                  {/* Expanded tools */}
+                  {isToolbarExpanded && (
+                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-stone-200 dark:border-stone-700">
+                      {/* Replace */}
                       <div className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-stone-500" />
-                        <input
-                          type="text"
-                          placeholder="原名"
-                          value={replaceFrom}
-                          onChange={e => setReplaceFrom(e.target.value)}
-                          className="text-sm border border-stone-200 rounded-md px-2 py-1.5 w-24 outline-none focus:border-indigo-500 bg-white"
-                        />
-                        <span className="text-stone-400 text-sm">→</span>
-                        <input
-                          type="text"
-                          placeholder="新名"
-                          value={replaceTo}
-                          onChange={e => setReplaceTo(e.target.value)}
-                          className="text-sm border border-stone-200 rounded-md px-2 py-1.5 w-24 outline-none focus:border-indigo-500 bg-white"
-                        />
-                        <button
-                          onClick={handleReplaceAll}
-                          disabled={!replaceFrom || !replaceTo}
-                          className="text-xs bg-white border border-stone-200 hover:bg-stone-100 text-stone-700 px-2.5 py-1.5 rounded-md font-medium disabled:opacity-50 transition-colors shadow-sm"
-                        >
-                          替換
-                        </button>
+                        <input type="text" placeholder="原名" value={replaceFrom} onChange={e => setReplaceFrom(e.target.value)} className="text-sm border border-stone-200 dark:border-stone-600 rounded-md px-2 py-1.5 w-20 outline-none focus:border-indigo-500 bg-white dark:bg-stone-700 dark:text-white" />
+                        <span className="text-stone-400">→</span>
+                        <input type="text" placeholder="新名" value={replaceTo} onChange={e => setReplaceTo(e.target.value)} className="text-sm border border-stone-200 dark:border-stone-600 rounded-md px-2 py-1.5 w-20 outline-none focus:border-indigo-500 bg-white dark:bg-stone-700 dark:text-white" />
+                        <button onClick={handleReplaceAll} disabled={!replaceFrom || !replaceTo} className="text-xs bg-white dark:bg-stone-700 border border-stone-200 dark:border-stone-600 hover:bg-stone-100 text-stone-700 dark:text-stone-200 px-2.5 py-1.5 rounded-md font-medium disabled:opacity-50 transition-colors shadow-sm">替換</button>
                       </div>
-
-                      {/* Divider */}
-                      <div className="w-px h-5 bg-stone-300 hidden xl:block"></div>
-
                       {/* Time Offset */}
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-stone-500" />
-                        <span className="text-xs text-stone-600 hidden xl:inline">時間校準:</span>
-                        <input
-                          type="number"
-                          value={timeOffset}
-                          onChange={e => setTimeOffset(Number(e.target.value))}
-                          className="w-16 text-sm border border-stone-200 rounded-md px-2 py-1.5 outline-none focus:border-indigo-500 bg-white"
-                          title="調整時間戳記的秒數誤差 (例如輸入 -9 表示提早 9 秒播放)"
-                        />
+                        <span className="text-xs text-stone-600 dark:text-stone-400">時間校準:</span>
+                        <input type="number" value={timeOffset} onChange={e => setTimeOffset(Number(e.target.value))} className="w-16 text-sm border border-stone-200 dark:border-stone-600 rounded-md px-2 py-1.5 outline-none focus:border-indigo-500 bg-white dark:bg-stone-700 dark:text-white" title="調整時間戳記的秒數誤差" />
                         <span className="text-xs text-stone-500">秒</span>
                       </div>
                     </div>
-                    
-                    {/* Mode Toggle */}
-                    <button
-                      onClick={() => setIsEditing(!isEditing)}
-                      className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-colors font-medium shrink-0 ${
-                        isEditing ? 'bg-indigo-100 text-indigo-700' : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 shadow-sm'
-                      }`}
-                    >
-                      {isEditing ? <Edit3 className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      {isEditing ? '編輯模式' : '閱讀模式'}
-                    </button>
-                  </div>
+                  )}
                 </div>
               )}
 
               {/* Tabs */}
-              <div className="flex border-b border-stone-100 bg-white shrink-0">
-                <button
-                  onClick={() => setActiveTab('raw')}
-                  className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                    activeTab === 'raw' 
-                      ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' 
-                      : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50'
-                  }`}
-                >
-                  <FileText className="w-4 h-4" />
-                  原始逐字稿
+              <div className="flex border-b border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 shrink-0">
+                <button onClick={() => setActiveTab('raw')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'raw' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
+                  <FileText className="w-4 h-4" /> 原始逸字稿
                 </button>
-                <button
-                  onClick={() => setActiveTab('cleaned')}
-                  className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                    activeTab === 'cleaned' 
-                      ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' 
-                      : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  清稿結果
+                <button onClick={() => setActiveTab('cleaned')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'cleaned' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
+                  <Sparkles className="w-4 h-4" /> 清稿逸字稿
                 </button>
-                <button
-                  onClick={() => setActiveTab('summary')}
-                  className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                    activeTab === 'summary' 
-                      ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' 
-                      : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50'
-                  }`}
-                >
-                  <Wand2 className="w-4 h-4" />
-                  AI 產出結果
+                <button onClick={() => setActiveTab('summary')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'summary' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
+                  <Wand2 className="w-4 h-4" /> AI 整理內容
                 </button>
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 relative bg-white flex flex-col overflow-hidden">
+              <div className="flex-1 relative bg-white dark:bg-stone-900 flex flex-col overflow-hidden">
                 {audioStatus === 'idle' && summaryStatus === 'idle' && !transcript && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center">
                     <FileText className="w-16 h-16 mb-4 opacity-20" />
@@ -905,13 +984,13 @@ ${textToSummarize}
                   </div>
                 )}
 
-                {((['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus)) && (!transcript || (activeTab === 'cleaned' && !cleanedText))) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center bg-white/80 backdrop-blur-sm z-10">
+                {(isProcessing && (!transcript || (activeTab === 'cleaned' && !cleanedText))) && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm z-10">
                     <Loader2 className="w-12 h-12 mb-4 animate-spin text-indigo-500" />
-                    <p className="text-indigo-900 font-medium text-lg animate-pulse">
+                    <p className="text-indigo-900 dark:text-indigo-300 font-medium text-lg animate-pulse">
                       {audioStatus === 'uploading' && '正在上傳音檔至伺服器...'}
                       {audioStatus === 'processing' && '伺服器正在處理音檔...'}
-                      {audioStatus === 'transcribing' && '正在聆聽並轉錄音檔...'}
+                      {audioStatus === 'transcribing' && '正在脩聽並轉錄音檔...'}
                       {audioStatus === 'cleaning' && '正在進行 AI 清稿與語句修飾...'}
                     </p>
                     <p className="text-sm mt-2 text-stone-500">這可能需要幾分鐘的時間，請稍候</p>
@@ -919,28 +998,26 @@ ${textToSummarize}
                 )}
 
                 {summaryStatus === 'summarizing' && activeTab === 'summary' && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center bg-white/80 backdrop-blur-sm z-10">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm z-10">
                     <Loader2 className="w-12 h-12 mb-4 animate-spin text-indigo-500" />
-                    <p className="text-indigo-900 font-medium text-lg animate-pulse">
-                      正在根據您的格式要求產生 AI 內容...
-                    </p>
+                    <p className="text-indigo-900 dark:text-indigo-300 font-medium text-lg animate-pulse">正在根據您的格式要求產生 AI 內容...</p>
                   </div>
                 )}
 
-                {/* Text Display / Edit Area */}
-                {(transcript || cleanedText || summaryText) && (
+                {/* Text Area */}
+                {hasContent && (
                   <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar">
                     {isEditing ? (
                       <textarea
                         value={getCurrentText()}
                         onChange={(e) => setCurrentText(e.target.value)}
                         placeholder="內容將顯示於此，您可以直接點擊進行編輯..."
-                        className={`w-full h-full min-h-full resize-none border-0 bg-transparent p-0 focus:ring-0 text-stone-800 leading-relaxed outline-none ${
+                        className={`w-full h-full min-h-full resize-none border-0 bg-transparent p-0 focus:ring-0 text-stone-800 dark:text-stone-200 leading-relaxed outline-none ${
                           activeTab === 'raw' ? 'font-mono text-sm' : 'font-sans text-base'
                         }`}
                       />
                     ) : (
-                      <div className={`whitespace-pre-wrap text-stone-800 leading-relaxed ${
+                      <div className={`whitespace-pre-wrap text-stone-800 dark:text-stone-200 leading-relaxed ${
                         activeTab === 'raw' ? 'font-mono text-sm' : 'font-sans text-base'
                       }`}>
                         {parseTimestampsAndHighlight(getCurrentText())}
@@ -950,25 +1027,41 @@ ${textToSummarize}
                 )}
               </div>
 
-              {/* Footer Actions */}
-              {(transcript || cleanedText || summaryText) && (
-                <div className="p-4 border-t border-stone-100 bg-stone-50 flex justify-end gap-3 shrink-0">
-                  <button
-                    onClick={downloadText}
-                    disabled={!getCurrentText()}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-lg text-sm font-medium text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Download className="w-4 h-4" />
-                    下載 .md
-                  </button>
-                  <button
-                    onClick={copyToClipboard}
-                    disabled={!getCurrentText()}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? '已複製' : '複製內容'}
-                  </button>
+              {/* Footer */}
+              {hasContent && (
+                <div className="p-4 border-t border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50 flex items-center justify-between gap-3 shrink-0">
+                  <span className="text-xs text-stone-400">{wordCount.toLocaleString()} 字</span>
+                  <div className="flex items-center gap-2">
+                    {/* Export dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                        disabled={!getCurrentText()}
+                        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-stone-700 border border-stone-200 dark:border-stone-600 rounded-lg text-sm font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50 transition-colors shadow-sm disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4" />
+                        下載
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      {isExportMenuOpen && (
+                        <div className="absolute bottom-full mb-1 right-0 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg shadow-lg overflow-hidden z-20 min-w-[120px]">
+                          {(['md', 'txt', 'srt'] as const).map(fmt => (
+                            <button key={fmt} onClick={() => downloadFile(fmt)} className="w-full text-left px-4 py-2 text-sm text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-2">
+                              <Download className="w-3.5 h-3.5" /> .{fmt}{fmt === 'srt' ? ' (字幕)' : ''}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={copyToClipboard}
+                      disabled={!getCurrentText()}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copied ? '已複製' : '複製內容'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
