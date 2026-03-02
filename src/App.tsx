@@ -23,7 +23,8 @@ export default function App() {
   const [isFetchingDrive, setIsFetchingDrive] = useState(false);
 
   // Split Status States
-  const [audioStatus, setAudioStatus] = useState<'idle' | 'transcribing' | 'cleaning' | 'success' | 'error'>('idle');
+  const [audioStatus, setAudioStatus] = useState<'idle' | 'uploading' | 'processing' | 'transcribing' | 'cleaning' | 'success' | 'error'>('idle');
+  const [audioProgress, setAudioProgress] = useState<number>(0);
   const [summaryStatus, setSummaryStatus] = useState<'idle' | 'summarizing' | 'success' | 'error'>('idle');
   
   const [transcript, setTranscript] = useState<string>('');
@@ -122,6 +123,7 @@ export default function App() {
   const handleDriveSubmit = async () => {
     if (!driveLink) return;
     setIsFetchingDrive(true);
+    setAudioStatus('uploading');
     setErrorMessage('');
     try {
       const res = await fetch('/api/fetch-drive', {
@@ -142,6 +144,7 @@ export default function App() {
       if (validateAndSetFile(downloadedFile)) {
         setUploadMode('local');
         setDriveLink('');
+        setAudioStatus('idle');
       }
     } catch (e: any) {
       setErrorMessage(e.message);
@@ -186,7 +189,8 @@ export default function App() {
   const processAudio = async () => {
     if (!file) return;
 
-    setAudioStatus('transcribing');
+    setAudioStatus('uploading');
+    setAudioProgress(0);
     setSummaryStatus('idle');
     setErrorMessage('');
     setTranscript('');
@@ -194,28 +198,62 @@ export default function App() {
     setSummaryText('');
     setIsEditing(false);
 
+    // Progress simulation intervals
+    let progressInterval: NodeJS.Timeout;
+    const startProgress = (start: number, end: number, duration: number) => {
+      clearInterval(progressInterval);
+      let current = start;
+      const step = (end - start) / (duration / 100);
+      progressInterval = setInterval(() => {
+        current += step;
+        if (current >= end) {
+          current = end;
+          clearInterval(progressInterval);
+        }
+        setAudioProgress(Math.floor(current));
+      }, 100);
+    };
+
     try {
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          const base64 = result.split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+      // Upload the file first
+      startProgress(0, 20, 3000); // Simulate upload up to 20%
+      let uploadedFile = await ai.files.upload({
+        file: file,
+        config: {
+          mimeType: file.type || 'audio/mp3',
+        }
       });
 
+      // Poll until the file is ACTIVE
+      if (uploadedFile.state === 'PROCESSING') {
+        setAudioStatus('processing');
+        startProgress(20, 40, 5000); // Simulate processing up to 40%
+      } else {
+        setAudioProgress(40);
+      }
+      
+      while (uploadedFile.state === 'PROCESSING') {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        uploadedFile = await ai.files.get({ name: uploadedFile.name! });
+      }
+
+      if (uploadedFile.state === 'FAILED') {
+        clearInterval(progressInterval);
+        throw new Error('File processing failed on the server.');
+      }
+
       // Transcribe
+      setAudioStatus('transcribing');
+      startProgress(40, 70, 15000); // Simulate transcribing up to 70%
       const glossaryPrompt = glossaryTerms.length > 0 ? `\n4. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
       const transcribeRes = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             {
-              inlineData: {
-                data: base64Data,
-                mimeType: file.type || 'audio/mp3',
+              fileData: {
+                fileUri: uploadedFile.uri,
+                mimeType: uploadedFile.mimeType || file.type || 'audio/mp3',
               },
             },
             {
@@ -237,6 +275,7 @@ export default function App() {
 
       // Clean up
       setAudioStatus('cleaning');
+      startProgress(70, 95, 10000); // Simulate cleaning up to 95%
       const cleanGlossaryPrompt = glossaryTerms.length > 0 ? `\n6. 請特別注意以下專有名詞，確保辨識正確（可能包含人名、技術名詞、地名等）：\n${glossaryTerms.join(', ')}` : '';
       const cleanRes = await ai.models.generateContent({
         model: 'gemini-3.1-pro-preview',
@@ -256,10 +295,14 @@ ${rawTranscript}
       const cleaned = cleanRes.text || '';
       
       setCleanedText(cleaned);
+      clearInterval(progressInterval);
+      setAudioProgress(100);
       setAudioStatus('success');
       setActiveTab('cleaned'); // Switch to cleaned when done
 
     } catch (error: any) {
+      clearInterval(progressInterval);
+      setAudioProgress(0);
       console.error(error);
       setErrorMessage(error.message || '發生錯誤，請稍後再試。');
       setAudioStatus('error');
@@ -408,7 +451,7 @@ ${textToSummarize}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Left Column: Two-Step Workflow (Takes 4 columns) */}
-          <div className="lg:col-span-4 space-y-6 sticky top-8">
+          <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto custom-scrollbar pb-4">
             
             {/* Step 1: Audio Processing */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-100">
@@ -542,7 +585,7 @@ ${textToSummarize}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddTerms(); } }}
                     placeholder="輸入專有名詞 (可用逗號或換行分隔多個，按 Enter 新增)"
                     className="w-full text-sm border border-stone-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-stone-50 resize-y min-h-[80px]"
-                    disabled={audioStatus === 'transcribing' || audioStatus === 'cleaning'}
+                    disabled={['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus)}
                   />
                   <div className="flex items-center justify-between">
                     {glossaryTerms.length > 0 ? (
@@ -558,7 +601,7 @@ ${textToSummarize}
                     )}
                     <button
                       onClick={handleAddTerms}
-                      disabled={!termInput.trim() || audioStatus === 'transcribing' || audioStatus === 'cleaning'}
+                      disabled={!termInput.trim() || ['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus)}
                       className="px-5 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       新增至字典
@@ -569,15 +612,17 @@ ${textToSummarize}
 
               <button
                 onClick={processAudio}
-                disabled={!file || audioStatus === 'transcribing' || audioStatus === 'cleaning'}
+                disabled={!file || ['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus)}
                 className={`w-full py-3 px-4 rounded-xl font-medium text-white shadow-sm transition-all flex items-center justify-center gap-2 ${
-                  !file || audioStatus === 'transcribing' || audioStatus === 'cleaning'
+                  !file || ['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus)
                     ? 'bg-stone-300 cursor-not-allowed'
                     : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md active:scale-[0.98]'
                 }`}
               >
-                {(audioStatus === 'transcribing' || audioStatus === 'cleaning') && <Loader2 className="w-5 h-5 animate-spin" />}
+                {['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus) && <Loader2 className="w-5 h-5 animate-spin" />}
                 {audioStatus === 'idle' && '開始轉錄與清稿'}
+                {audioStatus === 'uploading' && '上傳音檔中...'}
+                {audioStatus === 'processing' && '伺服器處理中...'}
                 {audioStatus === 'transcribing' && '轉錄中...'}
                 {audioStatus === 'cleaning' && '清稿中...'}
                 {audioStatus === 'success' && '重新處理音檔'}
@@ -588,13 +633,46 @@ ${textToSummarize}
               {(audioStatus !== 'idle' || transcript) && (
                 <div className="mt-5 p-4 bg-stone-50 rounded-xl border border-stone-100">
                   <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">處理進度</h4>
+                  
+                  {/* Progress Bar */}
+                  {audioStatus !== 'error' && audioStatus !== 'success' && (
+                    <div className="mb-4">
+                      <div className="flex justify-between text-xs text-stone-500 mb-1.5">
+                        <span>整體進度</span>
+                        <span>{audioProgress}%</span>
+                      </div>
+                      <div className="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${audioProgress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+
                   <ul className="space-y-3">
                     <li className="flex items-center gap-3">
-                      <div className={`mt-0.5 ${audioStatus === 'transcribing' ? 'text-indigo-600' : (transcript ? 'text-emerald-500' : 'text-stone-300')}`}>
-                        {audioStatus === 'transcribing' ? <Loader2 className="w-5 h-5 animate-spin" /> : (transcript ? <CheckCircle2 className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-stone-300" />)}
+                      <div className={`mt-0.5 ${audioStatus === 'uploading' ? 'text-indigo-600' : (['processing', 'transcribing', 'cleaning', 'success'].includes(audioStatus) || transcript ? 'text-emerald-500' : 'text-stone-300')}`}>
+                        {audioStatus === 'uploading' ? <Loader2 className="w-5 h-5 animate-spin" /> : (['processing', 'transcribing', 'cleaning', 'success'].includes(audioStatus) || transcript ? <CheckCircle2 className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-stone-300" />)}
                       </div>
-                      <span className={`text-sm font-medium ${audioStatus === 'transcribing' ? 'text-indigo-900' : (transcript ? 'text-stone-900' : 'text-stone-500')}`}>
-                        1. 語音轉錄
+                      <span className={`text-sm font-medium ${audioStatus === 'uploading' ? 'text-indigo-900' : (['processing', 'transcribing', 'cleaning', 'success'].includes(audioStatus) || transcript ? 'text-stone-900' : 'text-stone-500')}`}>
+                        1. 上傳音檔
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <div className={`mt-0.5 ${audioStatus === 'processing' ? 'text-indigo-600' : (['transcribing', 'cleaning', 'success'].includes(audioStatus) || transcript ? 'text-emerald-500' : 'text-stone-300')}`}>
+                        {audioStatus === 'processing' ? <Loader2 className="w-5 h-5 animate-spin" /> : (['transcribing', 'cleaning', 'success'].includes(audioStatus) || transcript ? <CheckCircle2 className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-stone-300" />)}
+                      </div>
+                      <span className={`text-sm font-medium ${audioStatus === 'processing' ? 'text-indigo-900' : (['transcribing', 'cleaning', 'success'].includes(audioStatus) || transcript ? 'text-stone-900' : 'text-stone-500')}`}>
+                        2. 伺服器處理
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <div className={`mt-0.5 ${audioStatus === 'transcribing' ? 'text-indigo-600' : (['cleaning', 'success'].includes(audioStatus) || transcript ? 'text-emerald-500' : 'text-stone-300')}`}>
+                        {audioStatus === 'transcribing' ? <Loader2 className="w-5 h-5 animate-spin" /> : (['cleaning', 'success'].includes(audioStatus) || transcript ? <CheckCircle2 className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-stone-300" />)}
+                      </div>
+                      <span className={`text-sm font-medium ${audioStatus === 'transcribing' ? 'text-indigo-900' : (['cleaning', 'success'].includes(audioStatus) || transcript ? 'text-stone-900' : 'text-stone-500')}`}>
+                        3. 語音轉錄
                       </span>
                     </li>
                     <li className="flex items-center gap-3">
@@ -602,7 +680,7 @@ ${textToSummarize}
                         {audioStatus === 'cleaning' ? <Loader2 className="w-5 h-5 animate-spin" /> : (cleanedText ? <CheckCircle2 className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-stone-300" />)}
                       </div>
                       <span className={`text-sm font-medium ${audioStatus === 'cleaning' ? 'text-indigo-900' : (cleanedText ? 'text-stone-900' : 'text-stone-500')}`}>
-                        2. AI 清稿
+                        4. AI 清稿
                       </span>
                     </li>
                   </ul>
@@ -679,8 +757,8 @@ ${textToSummarize}
           </div>
 
           {/* Right Column: Results (Takes 8 columns, taller height) */}
-          <div className="lg:col-span-8">
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-100 min-h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+          <div className="lg:col-span-8 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] flex flex-col">
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex-1 flex flex-col overflow-hidden">
               
               {/* Audio Player Header */}
               {audioUrl && (
@@ -827,10 +905,12 @@ ${textToSummarize}
                   </div>
                 )}
 
-                {((audioStatus === 'transcribing' || audioStatus === 'cleaning') && (!transcript || (activeTab === 'cleaned' && !cleanedText))) && (
+                {((['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus)) && (!transcript || (activeTab === 'cleaned' && !cleanedText))) && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center bg-white/80 backdrop-blur-sm z-10">
                     <Loader2 className="w-12 h-12 mb-4 animate-spin text-indigo-500" />
                     <p className="text-indigo-900 font-medium text-lg animate-pulse">
+                      {audioStatus === 'uploading' && '正在上傳音檔至伺服器...'}
+                      {audioStatus === 'processing' && '伺服器正在處理音檔...'}
                       {audioStatus === 'transcribing' && '正在聆聽並轉錄音檔...'}
                       {audioStatus === 'cleaning' && '正在進行 AI 清稿與語句修飾...'}
                     </p>
@@ -849,13 +929,13 @@ ${textToSummarize}
 
                 {/* Text Display / Edit Area */}
                 {(transcript || cleanedText || summaryText) && (
-                  <div className="flex-1 overflow-y-auto p-6 relative">
+                  <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar">
                     {isEditing ? (
                       <textarea
                         value={getCurrentText()}
                         onChange={(e) => setCurrentText(e.target.value)}
                         placeholder="內容將顯示於此，您可以直接點擊進行編輯..."
-                        className={`w-full h-full min-h-[500px] resize-none border-0 bg-transparent p-0 focus:ring-0 text-stone-800 leading-relaxed outline-none ${
+                        className={`w-full h-full min-h-full resize-none border-0 bg-transparent p-0 focus:ring-0 text-stone-800 leading-relaxed outline-none ${
                           activeTab === 'raw' ? 'font-mono text-sm' : 'font-sans text-base'
                         }`}
                       />
