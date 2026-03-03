@@ -529,7 +529,7 @@ ${textToSummarize}
           <button
             key={i}
             onClick={() => seekAudio(part)}
-            className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 font-mono bg-indigo-50 px-1.5 py-0.5 rounded mx-1 transition-colors cursor-pointer inline-flex items-center"
+            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-mono text-xs bg-blue-50/60 px-1.5 py-0.5 rounded mx-0.5 transition-colors cursor-pointer inline-flex items-center border border-blue-100"
             title={`點擊播放此段落 (自動校準 ${timeOffset > 0 ? '+' : ''}${timeOffset} 秒)`}
           >
             [{part}]
@@ -545,20 +545,20 @@ ${textToSummarize}
   const wordCount = getCurrentText().replace(/\s+/g, '').length;
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <header className="mb-8 text-center relative">
-          <div className="absolute right-0 top-0 flex items-center gap-2">
+    <div className="min-h-screen bg-[#FAFAF9] dark:bg-[#111111] text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-100 selection:text-blue-900">
+      <div className="max-w-[1200px] mx-auto px-5 py-6">
+        <header className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
-              className="lg:hidden p-2 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
+              className="lg:hidden p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               title="切換操作面板"
             >
-              {isLeftPanelOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+              {isLeftPanelOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-5 h-5" />}
             </button>
             <button
               onClick={() => setIsDark(!isDark)}
-              className="p-2 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
+              className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               title="切換深色/淡色模式"
             >
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -573,13 +573,13 @@ ${textToSummarize}
           </p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           
           {/* Left Column */}
-          <div className={`lg:col-span-4 space-y-6 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto custom-scrollbar pb-4 ${!isLeftPanelOpen ? 'hidden lg:block' : ''}`}>
+          <div className={`lg:col-span-4 space-y-3 lg:sticky lg:top-6 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto custom-scrollbar pb-4 ${!isLeftPanelOpen ? 'hidden lg:block' : ''}`}>
             
             {/* Step 1: Audio Processing */}
-            <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800">
+            <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
               <div className="flex items-center gap-3 mb-5">
                 <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold">1</div>
                 <h3 className="text-lg font-bold text-stone-900">語音轉錄與清稿</h3>
@@ -874,7 +874,7 @@ ${textToSummarize}
 
             {/* Global Error Message */}
             {errorMessage && (
-              <div className="p-4 bg-red-50 text-red-700 rounded-xl flex items-start gap-3 text-sm border border-red-100">
+              <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg flex items-start gap-2 text-xs border border-red-100 dark:border-red-900">
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">{errorMessage}</p>
               </div>
@@ -882,12 +882,12 @@ ${textToSummarize}
           </div>
 
           {/* Right Column */}
-          <div className="lg:col-span-8 lg:sticky lg:top-8 lg:h-[calc(100vh-6rem)] flex flex-col">
-            <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 flex-1 flex flex-col min-h-0">
+          <div className="lg:col-span-8 lg:sticky lg:top-6 lg:h-[calc(100vh-5rem)] flex flex-col">
+            <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-slate-200 dark:border-slate-800 flex-1 flex flex-col min-h-0">
               
               {/* Audio Player */}
               {audioUrl && (
-                <div className="bg-stone-900 dark:bg-stone-950 px-4 py-3 flex flex-col gap-2 border-b border-stone-800">
+                <div className="bg-slate-900 dark:bg-black px-4 py-2.5 flex flex-col gap-2 border-b border-slate-800 rounded-t-lg">
                   <audio
                     ref={audioRef}
                     src={audioUrl}
@@ -909,20 +909,20 @@ ${textToSummarize}
 
               {/* Document Title */}
               {file?.name && hasContent && (
-                <div className="bg-white dark:bg-stone-900 px-5 py-3 border-b border-stone-100 dark:border-stone-800 flex items-center gap-3">
+                <div className="bg-white dark:bg-[#1a1a1a] px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 shrink-0">
                     <FileAudio className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-sm font-bold text-stone-800 dark:text-white truncate" title={file.name}>{file.name}</h2>
-                    {audioDuration !== null && <p className="text-xs text-stone-400">{formatDuration(audioDuration)}</p>}
+                    {audioDuration !== null && <p className="text-[11px] text-slate-400">{formatDuration(audioDuration)}</p>}
                   </div>
                 </div>
               )}
 
               {/* Toolbar */}
               {hasContent && (
-                <div className="bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 p-3 flex flex-col gap-2">
+                <div className="bg-white dark:bg-[#1a1a1a] border-b border-slate-100 dark:border-slate-800 px-3 py-2 flex flex-col gap-2 shrink-0">
                   <div className="flex items-center justify-between gap-2">
                     {/* Search */}
                     <div className="relative flex-1 max-w-[220px]">
@@ -983,20 +983,20 @@ ${textToSummarize}
               )}
 
               {/* Tabs */}
-              <div className="flex border-b border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 shrink-0">
-                <button onClick={() => setActiveTab('raw')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'raw' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
+              <div className="flex border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#1a1a1a] shrink-0">
+                <button onClick={() => setActiveTab('raw')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'raw' ? 'text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-white' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900' }`}>
                   <FileText className="w-4 h-4" /> 原始逐字稿
                 </button>
-                <button onClick={() => setActiveTab('cleaned')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'cleaned' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
+                <button onClick={() => setActiveTab('cleaned')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'cleaned' ? 'text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-white' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900' }`}>
                   <Sparkles className="w-4 h-4" /> 清稿逐字稿
                 </button>
-                <button onClick={() => setActiveTab('summary')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'summary' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30' : 'text-stone-500 hover:text-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800' }`}>
+                <button onClick={() => setActiveTab('summary')} className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${ activeTab === 'summary' ? 'text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-white' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900' }`}>
                   <Wand2 className="w-4 h-4" /> AI 整理內容
                 </button>
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 relative bg-white dark:bg-stone-900 flex flex-col min-h-0">
+              <div className="flex-1 relative bg-white dark:bg-[#1a1a1a] flex flex-col min-h-0">
                 {audioStatus === 'idle' && summaryStatus === 'idle' && !transcript && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center">
                     <FileText className="w-16 h-16 mb-4 opacity-20" />
@@ -1005,15 +1005,15 @@ ${textToSummarize}
                 )}
 
                 {(isProcessing && (!transcript || (activeTab === 'cleaned' && !cleanedText))) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-stone-400 p-6 text-center bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm z-10">
-                    <Loader2 className="w-12 h-12 mb-4 animate-spin text-indigo-500" />
-                    <p className="text-indigo-900 dark:text-indigo-300 font-medium text-lg animate-pulse">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-sm z-10">
+                    <Loader2 className="w-8 h-8 mb-3 animate-spin text-slate-400" />
+                    <p className="text-slate-700 dark:text-slate-300 font-medium text-sm animate-pulse">
                       {audioStatus === 'uploading' && '正在上傳音檔至伺服器...'}
                       {audioStatus === 'processing' && '伺服器正在處理音檔...'}
                       {audioStatus === 'transcribing' && '正在脩聽並轉錄音檔...'}
                       {audioStatus === 'cleaning' && '正在進行 AI 清稿與語句修飾...'}
                     </p>
-                    <p className="text-sm mt-2 text-stone-500">這可能需要幾分鐘的時間，請稍候</p>
+                    <p className="text-xs mt-1.5 text-slate-400">這可能需要幾分鐘的時間，請稍候</p>
                   </div>
                 )}
 
@@ -1032,12 +1032,12 @@ ${textToSummarize}
                         value={getCurrentText()}
                         onChange={(e) => setCurrentText(e.target.value)}
                         placeholder="內容將顯示於此，您可以直接點擊進行編輯..."
-                        className={`w-full h-full min-h-full resize-none border-0 bg-transparent p-0 focus:ring-0 text-stone-800 dark:text-stone-200 leading-relaxed outline-none ${
+                        className={`w-full h-full min-h-full resize-none border-0 bg-transparent p-0 focus:ring-0 text-slate-800 dark:text-slate-200 leading-7 outline-none ${
                           activeTab === 'raw' ? 'font-mono text-sm' : 'font-sans text-base'
                         }`}
                       />
                     ) : (
-                      <div className={`whitespace-pre-wrap text-stone-800 dark:text-stone-200 leading-relaxed ${
+                      <div className={`whitespace-pre-wrap text-slate-800 dark:text-slate-200 leading-7 ${
                         activeTab === 'raw' ? 'font-mono text-sm' : 'font-sans text-base'
                       }`}>
                         {parseTimestampsAndHighlight(getCurrentText())}
@@ -1049,7 +1049,7 @@ ${textToSummarize}
 
               {/* Footer */}
               {hasContent && (
-                <div className="p-4 border-t border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50 flex items-center justify-between gap-3 shrink-0">
+                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#1a1a1a] flex items-center justify-between gap-3 shrink-0">
                   <span className="text-xs text-stone-400">{wordCount.toLocaleString()} 字</span>
                   <div className="flex items-center gap-2">
                     {/* Export dropdown */}
@@ -1076,7 +1076,7 @@ ${textToSummarize}
                     <button
                       onClick={copyToClipboard}
                       disabled={!getCurrentText()}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 dark:bg-white border border-transparent rounded-md text-xs font-medium text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-100 transition-colors disabled:opacity-40 cursor-pointer"
                     >
                       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                       {copied ? '已複製' : '複製內容'}
