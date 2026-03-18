@@ -1,4 +1,4 @@
-import { Sparkles, Moon, Sun, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Sparkles, Moon, Sun, PanelLeftClose, PanelLeftOpen, Shield } from 'lucide-react';
 
 interface AppHeaderProps {
   isDark: boolean;
@@ -32,6 +32,10 @@ export default function AppHeader({ isDark, setIsDark, isLeftPanelOpen, setIsLef
       </h1>
       <p className="text-lg text-stone-600 dark:text-stone-400 max-w-2xl mx-auto">
         上傳您的 Podcast 訪談或會議記錄音檔。我們將為您自動進行精準轉錄與專業清稿，並可根據您的需求，無限次產出不同格式的內容。
+      </p>
+      <p className="flex items-center justify-center gap-1.5 text-xs text-stone-400 dark:text-stone-500 mt-2">
+        <Shield className="w-3.5 h-3.5" />
+        您的語音資料與轉錄內容全程在瀏覽器中處理，不會上傳至我們的伺服器，請安心使用。
       </p>
     </header>
   );
