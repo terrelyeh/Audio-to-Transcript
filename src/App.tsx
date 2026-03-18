@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { AlertCircle, RotateCcw, X } from 'lucide-react';
+import { hasEnvKey, getEffectiveApiKey } from './lib/utils';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useGlossary } from './hooks/useGlossary';
 import { usePrompts } from './hooks/usePrompts';
 import { useAudioFile } from './hooks/useAudioFile';
 import { useTranscription } from './hooks/useTranscription';
 import AppHeader from './components/AppHeader';
+import ApiKeyInput from './components/ApiKeyInput';
 import AudioUploadPanel from './components/AudioUploadPanel';
 import ContentGenerationPanel from './components/ContentGenerationPanel';
 import TranscriptViewer from './components/TranscriptViewer';
@@ -17,6 +19,8 @@ export default function App() {
   const [transcriptionLang, setTranscriptionLang] = useState(() =>
     localStorage.getItem('ai_transcriber_lang') || 'zh-TW'
   );
+  const [hasApiKey, setHasApiKey] = useState(() => !!getEffectiveApiKey());
+  const needsApiKey = !hasEnvKey && !hasApiKey;
 
   const transcription = useTranscription();
   const audioFile = useAudioFile(transcription.resetState);
@@ -49,6 +53,11 @@ export default function App() {
           isLeftPanelOpen={isLeftPanelOpen}
           setIsLeftPanelOpen={setIsLeftPanelOpen}
         />
+
+        {/* BYOK: API Key Input */}
+        {needsApiKey && (
+          <ApiKeyInput onKeySet={() => setHasApiKey(true)} />
+        )}
 
         {/* Draft Restore Banner */}
         {transcription.hasDraft && !transcription.transcript && (

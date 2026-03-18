@@ -1,9 +1,28 @@
 import { GoogleGenAI } from '@google/genai';
 
+// BYOK: env var (deployer) → localStorage (user) → null
+const ENV_KEY = process.env.GEMINI_API_KEY;
+export const hasEnvKey = !!ENV_KEY;
+
+export function getStoredApiKey(): string {
+  return localStorage.getItem('ai_transcriber_api_key') || '';
+}
+
+export function setStoredApiKey(key: string) {
+  localStorage.setItem('ai_transcriber_api_key', key);
+  _ai = null; // reset so next getAI() uses the new key
+}
+
+export function getEffectiveApiKey(): string {
+  return ENV_KEY || getStoredApiKey();
+}
+
 let _ai: GoogleGenAI | null = null;
 export function getAI(): GoogleGenAI {
+  const key = getEffectiveApiKey();
+  if (!key) throw new Error('請先輸入您的 Gemini API Key');
   if (!_ai) {
-    _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    _ai = new GoogleGenAI({ apiKey: key });
   }
   return _ai;
 }
