@@ -39,14 +39,14 @@ export default function ContentGenerationPanel({
   const isBusy = summaryStatus === 'summarizing';
 
   return (
-    <div className={`card p-6 transition-all duration-300 ${isReady ? 'card-accent opacity-100' : 'opacity-60'}`}>
-      <div className="flex items-center gap-3 mb-5">
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-colors ${
+    <div className={`card p-5 transition-all duration-300 ${isReady ? 'card-accent opacity-100' : 'opacity-60'}`}>
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm transition-colors ${
           isReady
             ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/20'
             : 'bg-stone-100 dark:bg-stone-800 text-stone-400'
         }`}>2</div>
-        <h3 className={`text-base font-bold transition-colors ${isReady ? 'text-stone-900 dark:text-white' : 'text-stone-400'}`}>AI 內容產出</h3>
+        <h3 className={`text-sm font-bold transition-colors ${isReady ? 'text-stone-900 dark:text-white' : 'text-stone-400'}`}>AI 內容產出</h3>
       </div>
 
       {!isReady ? (

@@ -53,11 +53,12 @@ export default function AudioUploadPanel({
   const isProcessing = ['uploading', 'processing', 'transcribing', 'cleaning'].includes(audioStatus);
 
   return (
-    <div className="card card-accent p-6">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm shadow-indigo-500/20">1</div>
-        <h3 className="text-base font-bold text-stone-900 dark:text-white">語音轉錄與清稿</h3>
+    <div className="card card-accent p-5">
+      <div className="flex items-center gap-2.5 mb-1">
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center text-[11px] font-bold shadow-sm shadow-indigo-500/20">1</div>
+        <h3 className="text-sm font-bold text-stone-900 dark:text-white">語音轉錄與清稿</h3>
       </div>
+      <p className="text-[11px] text-stone-400 dark:text-stone-500 mb-4 ml-[34px]">上傳音檔，AI 自動轉錄並清稿</p>
 
       {/* Upload Tabs */}
       <div className="flex gap-1 mb-4 bg-stone-100 dark:bg-stone-800 p-1 rounded-lg">
@@ -142,7 +143,7 @@ export default function AudioUploadPanel({
       )}
 
       {/* Glossary Section */}
-      <div className="mb-5">
+      <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
             專有名詞字典 <span className="text-stone-400 font-normal text-xs">(選填)</span>
@@ -211,7 +212,7 @@ export default function AudioUploadPanel({
       </div>
 
       {/* Language Selector */}
-      <div className="mb-5">
+      <div className="mb-4">
         <label className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1.5">轉錄語言</label>
         <select
           value={transcriptionLang}

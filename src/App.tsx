@@ -46,7 +46,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-page)] text-stone-900 dark:text-stone-100 transition-colors duration-200 selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100">
-      <div className="max-w-[1200px] mx-auto px-5 py-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4">
         <AppHeader
           isDark={isDark}
           setIsDark={setIsDark}
@@ -75,8 +75,8 @@ export default function App() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          {/* Left Column */}
-          <div className={`lg:col-span-4 space-y-3 lg:sticky lg:top-6 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto custom-scrollbar pb-4 ${!isLeftPanelOpen ? 'hidden lg:block' : ''}`}>
+          {/* Left Column — sidebar controls */}
+          <div className={`lg:col-span-4 xl:col-span-3 space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto custom-scrollbar pb-4 ${!isLeftPanelOpen ? 'hidden lg:block' : ''}`}>
             <AudioUploadPanel
               file={audioFile.file}
               setFile={audioFile.setFile}
@@ -126,8 +126,8 @@ export default function App() {
             )}
           </div>
 
-          {/* Right Column */}
-          <div className="lg:col-span-8 lg:sticky lg:top-6 lg:h-[calc(100vh-5rem)] flex flex-col">
+          {/* Right Column — main content stage */}
+          <div className="lg:col-span-8 xl:col-span-9 lg:sticky lg:top-4 lg:h-[calc(100vh-3.5rem)] flex flex-col">
             <TranscriptViewer
               file={audioFile.file}
               audioUrl={audioFile.audioUrl}

@@ -3,7 +3,7 @@
 
 /* ─── Design Tokens ─── */
 :root {
-  --bg-page: #FAFAF9;
+  --bg-page: #F0EFED;
   --bg-card: #ffffff;
   --bg-card-elevated: #ffffff;
   --bg-inset: #f5f5f4;        /* stone-100 */
@@ -11,17 +11,21 @@
   --border-default: #d6d3d1;  /* stone-300 */
   --ring-accent: rgba(99, 102, 241, 0.35);
   --shadow-accent: rgba(99, 102, 241, 0.12);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  --shadow-card-lg: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .dark {
-  --bg-page: #111111;
-  --bg-card: #1a1a1a;
-  --bg-card-elevated: #222222;
-  --bg-inset: #1c1c1c;
-  --border-subtle: #292524;    /* stone-800 */
-  --border-default: #44403c;   /* stone-700 */
+  --bg-page: #0e0e0e;
+  --bg-card: #181818;
+  --bg-card-elevated: #1e1e1e;
+  --bg-inset: #141414;
+  --border-subtle: #262626;
+  --border-default: #3a3a3a;
   --ring-accent: rgba(129, 140, 248, 0.3);
   --shadow-accent: rgba(129, 140, 248, 0.08);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-card-lg: 0 4px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
 }
 
 @layer base {
@@ -67,7 +71,16 @@
   .card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 0.75rem; /* rounded-xl */
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ─── Main content card (right panel) — more prominent ─── */
+  .card-main {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-card-lg);
   }
 
   /* ─── Accent top-border for cards ─── */

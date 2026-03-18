@@ -188,7 +188,7 @@ export default function TranscriptViewer({
   ];
 
   return (
-    <div className="card flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="card-main flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Audio Player */}
       {audioUrl && (
         <div className="bg-[var(--bg-inset)] px-4 py-3 flex flex-col gap-2 border-b border-[var(--border-subtle)] rounded-t-xl">
