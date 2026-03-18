@@ -45,7 +45,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] dark:bg-[#111111] text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[var(--bg-page)] text-stone-900 dark:text-stone-100 transition-colors duration-200 selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100">
       <div className="max-w-[1200px] mx-auto px-5 py-6">
         <AppHeader
           isDark={isDark}
@@ -61,13 +61,13 @@ export default function App() {
 
         {/* Draft Restore Banner */}
         {transcription.hasDraft && !transcription.transcript && (
-          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between gap-3">
-            <p className="text-sm text-amber-800 dark:text-amber-200">偵測到上次未完成的草稿，是否恢復？</p>
+          <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 rounded-xl flex items-center justify-between gap-3">
+            <p className="text-sm text-indigo-800 dark:text-indigo-200">偵測到上次未完成的草稿，是否恢復？</p>
             <div className="flex items-center gap-2">
-              <button onClick={transcription.restoreDraft} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-md text-xs font-medium hover:bg-amber-700 transition-colors">
+              <button onClick={transcription.restoreDraft} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors">
                 <RotateCcw className="w-3.5 h-3.5" /> 恢復草稿
               </button>
-              <button onClick={transcription.dismissDraft} className="p-1.5 text-amber-500 hover:text-amber-700 transition-colors" title="忽略">
+              <button onClick={transcription.dismissDraft} className="p-1.5 text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors" aria-label="忽略">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -119,7 +119,7 @@ export default function App() {
 
             {/* Global Error Message */}
             {combinedErrorMessage && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg flex items-start gap-2 text-xs border border-red-100 dark:border-red-900">
+              <div className="p-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl flex items-start gap-2 text-xs border border-red-100 dark:border-red-900/60">
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">{combinedErrorMessage}</p>
               </div>
